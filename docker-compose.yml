@@ -1,0 +1,64 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: postgres_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: onemedia
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nest_backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgresql://postgres:root@db:5432/onemedia"
+      JWT_ACCESS_SECRET: "9201@(&$@&039472jsjfgsdcnsj*#($)"
+      JWT_REFRESH_SECRET: "YTE83*48*^$)Q(&hwgecve83(&@$*$@)"
+      ACCESS_TOKEN_TTL: "15m"
+      REFRESH_TOKEN_TTL: "30d"
+      NODE_ENV: development
+    command: sh -c "npx prisma generate && npx prisma migrate deploy && npm run start:dev"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./backend/src:/usr/src/app/src
+      - ./backend/prisma:/usr/src/app/prisma
+      - ./backend/generated:/usr/src/app/generate
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: react_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      REACT_APP_API_URL: http://localhost:3000
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./frontend:/usr/src/app
+      - /usr/src/app/node_modules
+
+volumes:
+  db-data:
+  backend-dist:
